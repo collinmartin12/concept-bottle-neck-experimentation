@@ -1,0 +1,237 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ──
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=2.4cm}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{authblk}
+\usepackage{float}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% ── Title ──
+\title{Concept Bottleneck Models on CelebA:\\
+       Accuracy, Interpretability, and Steerability}
+\author{Collin Martin}
+\affil{Neural Networks -- Project I (Heavy Version)}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% ══════════════════════════════════════════════════════════════
+\section{Experimental Setup}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Dataset}
+
+We use the \textbf{CelebA} dataset with \textbf{Smiling} as the binary prediction target. The dataset is split into 162\,770 training, 19\,867 validation, and 19\,962 test images. Standard preprocessing is applied: center-crop to $178 \times 178$, resize to $224 \times 224$, and ImageNet normalization.
+
+Accessing the dataset itself proved to be an early obstacle. Our initial approach relied on mounting Google Drive within Colab, but authentication repeatedly failed with credential propagation errors. We eventually migrated to downloading CelebA through \texttt{kagglehub}, which provided more reliable access. Even then, intermittent file-system timeouts required implementing a retry mechanism with exponential back-off to ensure the image directory was consistently accessible at the start of each session.
+
+\subsection{Concept Set}
+
+We use a predefined set of 10 facial-attribute concepts: \emph{Mouth\_Slightly\_Open}, \emph{High\_Cheekbones}, \emph{Chubby}, \emph{Narrow\_Eyes}, \emph{Bags\_Under\_Eyes}, \emph{Big\_Lips}, \emph{Big\_Nose}, \emph{Pointy\_Nose}, \emph{Bushy\_Eyebrows}, and \emph{Arched\_Eyebrows}. These concepts exhibit severe label imbalance. \emph{Mouth\_Slightly\_Open} is nearly balanced at 50.5\% positive, but \emph{Chubby} has only 5.8\% positive samples (positive weight 16.34), and \emph{Bushy\_Eyebrows} only 14.4\% (positive weight 5.96). We apply per-concept positive weights in the binary cross-entropy loss to counteract this, computing each weight as the ratio of negative to positive samples. Without this weighting, early training runs produced concept heads that predicted the majority class for every sample on rare concepts, yielding F1 scores near zero.
+
+\subsection{Shared Backbone}
+
+All models use a \textbf{ResNet-18} backbone initialized with ImageNet-pretrained weights, with the final fully connected layer removed. The resulting 512-dimensional feature vector is shared across all model variants.
+
+\subsection{Models}
+
+We implement four model families:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Baseline classifier} ($x \to y$): A linear head maps backbone features directly to the Smiling label.
+  \item \textbf{Concept predictor} ($x \to c$): A linear head maps backbone features to 10 concept logits, trained with weighted binary cross-entropy.
+  \item \textbf{Concept Bottleneck Model} ($x \to c \to y$): Predicted concept probabilities (sigmoid-activated) are passed to a linear label head. We use the \textbf{independent} training strategy: the concept predictor is trained and frozen first, then the label head is trained on predicted concept probabilities.
+  \item \textbf{Hybrid CBM with side channel}: The label prediction is the sum of a concept-path logit $f(c)$ and a side-channel logit $s(x)$ that operates directly on backbone features. Dropout is applied exclusively to the side channel during training at probabilities $p \in \{0.0, 0.1, 0.3, 0.5, 0.7, 0.9\}$.
+\end{enumerate}
+
+All models are trained with Adam (learning rate $10^{-4}$). The hybrid models use a combined loss $\mathcal{L} = \text{BCE}(\hat{y}, y) + 0.5 \cdot \text{BCE}(\hat{c}, c)$. The best model checkpoint is selected by validation AUROC.
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Quantitative Results}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Baseline Classifier ($x \to y$)}
+
+The baseline achieves strong performance on Smiling prediction with no concept supervision: 0.9251 accuracy and 0.9808 AUROC. This sets the upper bound for what the backbone architecture can achieve on this task without any interpretability constraints.
+
+
+\subsection{Concept Predictor ($x \to c$)}
+
+Table~\ref{tab:concepts} reports per-concept test performance from the CBM's concept head. The results reveal a wide performance gap driven by class imbalance. \emph{Mouth\_Slightly\_Open} and \emph{High\_Cheekbones}, both near-balanced in the training set, achieve F1 scores above 0.86. At the other extreme, \emph{Chubby} achieves only 0.35 F1 despite 82\% accuracy --- a classic signature of a model that leans toward predicting the majority class. Even with positive weighting at 16.34, the concept head struggles to reliably detect this rare attribute. Several mid-range concepts (\emph{Narrow\_Eyes}, \emph{Big\_Lips}, \emph{Big\_Nose}, \emph{Pointy\_Nose}) cluster around 0.55--0.59 F1, indicating that the linear concept head reaches a ceiling for subjective or visually subtle attributes.
+
+\begin{table}[H]
+\centering
+\caption{Per-concept prediction performance (test set).}
+\label{tab:concepts}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Concept} & \textbf{Accuracy} & \textbf{F1} \\
+\midrule
+Mouth\_Slightly\_Open  & 0.9382 & 0.9373 \\
+High\_Cheekbones       & 0.8626 & 0.8610 \\
+Chubby                 & 0.8187 & 0.3485 \\
+Narrow\_Eyes            & 0.7849 & 0.5148 \\
+Bags\_Under\_Eyes       & 0.8134 & 0.6460 \\
+Big\_Lips              & 0.6581 & 0.5875 \\
+Big\_Nose              & 0.7641 & 0.5931 \\
+Pointy\_Nose           & 0.7224 & 0.5905 \\
+Bushy\_Eyebrows        & 0.8888 & 0.6625 \\
+Arched\_Eyebrows       & 0.8029 & 0.7161 \\
+\midrule
+\textbf{Macro Average} & 0.8054 & 0.6457 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This moderate concept quality (macro-F1 of 0.65) is important context for the rest of the results: the CBM's label predictions are built on top of imperfect concept estimates, and any error in the concept layer propagates forward.
+
+
+\subsection{Concept Bottleneck Model ($x \to c \to y$)}
+
+The independent CBM achieves 0.8752 accuracy and 0.9448 AUROC on Smiling prediction. This represents a drop of approximately 5 percentage points in accuracy relative to the baseline, which is expected: the model is constrained to predict the label exclusively through 10 binary concepts, a significant information bottleneck. Facial features that are predictive of smiling but not captured by the chosen concept set --- such as dimples, teeth visibility, or eye crinkle patterns --- are lost entirely.
+
+
+\subsection{Hybrid CBM with Side-Channel Dropout}
+
+Table~\ref{tab:final} shows the hybrid model's test performance across dropout levels. All hybrid variants recover or exceed baseline accuracy, confirming that the side channel compensates for the bottleneck. Accuracy and AUROC remain largely stable across dropout probabilities, suggesting that even under heavy dropout the model finds a way to maintain performance.
+
+\begin{table}[H]
+\centering
+\caption{Final comparison of all models.}
+\label{tab:final}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{Accuracy} & \textbf{AUROC} & \textbf{Concept F1} \\
+\midrule
+Baseline ($x \to y$)          & 0.9251 & 0.9808 & ---    \\
+CBM ($x \to c \to y$)         & 0.8752 & 0.9448 & 0.6457 \\
+Hybrid ($p = 0.0$)            & 0.9269 & 0.9830 & ---    \\
+Hybrid ($p = 0.1$)            & 0.9275 & 0.9827 & ---    \\
+Hybrid ($p = 0.3$)            & 0.9301 & 0.9828 & ---    \\
+Hybrid ($p = 0.5$)            & 0.9306 & 0.9839 & ---    \\
+Hybrid ($p = 0.7$)            & 0.9294 & 0.9832 & ---    \\
+Hybrid ($p = 0.9$)            & 0.9302 & 0.9836 & ---    \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+An important caveat: the hybrid models were each trained for only one epoch due to compute constraints in the Colab environment. This limitation, discussed further in Section~\ref{sec:training_limitation}, likely affects the steerability results more than the accuracy results, since the side channel can latch onto informative backbone features within a single pass over the data.
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Steerability: Concept Interventions}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Intervention Procedure}
+
+For each test image, we compute the predicted concept vector and binarize it at a threshold of 0.5. We then flip each concept individually ($0 \to 1$ or $1 \to 0$), keeping the remaining concepts at their original predicted probabilities, and recompute the label prediction through the label head (plus the side channel for hybrid models, with dropout disabled). We measure two quantities: the average absolute change in $P(\text{Smiling})$ and the fraction of samples for which the predicted label changes (flip rate).
+
+\subsection{Pure CBM Results}
+
+Table~\ref{tab:cbm_intervention} shows the intervention effects for the pure CBM, ranked by average effect. \emph{High\_Cheekbones} is by far the most influential concept, flipping the predicted label in 84\% of test samples with an average probability shift of 0.43. \emph{Mouth\_Slightly\_Open} ranks second with a flip rate of 34\%. These two concepts together account for the vast majority of the CBM's predictive signal for Smiling, which is both intuitively reasonable and a validation that the bottleneck weights are semantically meaningful.
+
+The bottom of the ranking is equally informative: \emph{Narrow\_Eyes} and \emph{Pointy\_Nose} have negligible intervention effects ($< 0.02$), confirming that the model correctly assigns minimal weight to concepts with no causal relationship to smiling.
+
+\begin{table}[H]
+\centering
+\caption{Concept intervention effects for the pure CBM, ranked by avg $|\Delta P|$.}
+\label{tab:cbm_intervention}
+\begin{tabular}{clcc}
+\toprule
+\textbf{Rank} & \textbf{Concept} & \textbf{Avg $|\Delta P(\text{Smiling})|$} & \textbf{Flip Rate} \\
+\midrule
+1  & High\_Cheekbones       & 0.4264 & 0.8400 \\
+2  & Mouth\_Slightly\_Open  & 0.2785 & 0.3401 \\
+3  & Big\_Lips              & 0.1284 & 0.1449 \\
+4  & Chubby                 & 0.1244 & 0.1288 \\
+5  & Big\_Nose              & 0.0756 & 0.0861 \\
+6  & Bushy\_Eyebrows        & 0.0447 & 0.0521 \\
+7  & Arched\_Eyebrows       & 0.0221 & 0.0232 \\
+8  & Bags\_Under\_Eyes       & 0.0197 & 0.0240 \\
+9  & Pointy\_Nose           & 0.0193 & 0.0224 \\
+10 & Narrow\_Eyes            & 0.0098 & 0.0114 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Hybrid CBM Results}
+
+Table~\ref{tab:hybrid_intervention} summarizes the mean intervention effect (averaged across all 10 concepts) for hybrid models at selected dropout levels.
+
+\begin{table}[H]
+\centering
+\caption{Mean concept intervention effect across all concepts for each model.}
+\label{tab:hybrid_intervention}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{Mean Avg $|\Delta P|$} & \textbf{Mean Flip Rate} \\
+\midrule
+Pure CBM                     & 0.1149 & 0.1653 \\
+Hybrid ($p = 0.0$)           & 0.0050 & 0.0043 \\
+Hybrid ($p = 0.5$)           & 0.0056 & 0.0055 \\
+Hybrid ($p = 0.9$)           & 0.0054 & 0.0063 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The intervention effects for all hybrid models are approximately \textbf{20 times smaller} than for the pure CBM. Critically, increasing the side-channel dropout from $p = 0.0$ to $p = 0.9$ does not produce a meaningful increase in steerability. The concept path contributes so little to the final logit that flipping any individual concept barely perturbs the output.
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Discussion}
+% ══════════════════════════════════════════════════════════════
+
+\subsection{Accuracy vs.\ Interpretability}
+
+The baseline classifier achieves 92.5\% accuracy and 0.981 AUROC by learning unconstrained features. The pure CBM, forced to route all information through 10 binary concepts, drops to 87.5\% accuracy (0.945 AUROC). This 5-point gap represents the cost of full interpretability: the concept bottleneck discards information that is predictive of Smiling but not captured by the chosen concept set. The hybrid models recover this gap entirely, achieving accuracy on par with or slightly above the baseline across all dropout levels.
+
+\subsection{Accuracy vs.\ Steerability}
+
+Our results reveal a sharp, nearly binary trade-off rather than the smooth continuum we anticipated. The pure CBM is fully steerable --- flipping a single concept like \emph{High\_Cheekbones} changes the predicted label for 84\% of test images --- but pays for it in accuracy. The hybrid models preserve accuracy but are effectively non-steerable: concept interventions change the predicted label for fewer than 1\% of samples, because the side channel provides an independent, dominant pathway from image features to the label.
+
+This result highlights a fundamental tension in the hybrid CBM design. The side channel exists to recover information lost in the bottleneck, but in doing so it renders concept interventions ineffective. The model learns to route its predictive signal through the direct path whenever that path is available, regardless of how much dropout regularization is applied during training.
+
+\subsection{Effect of Side-Channel Dropout}
+
+We expected increasing dropout to progressively shift reliance from the side channel to the concept path, producing a smooth interpolation between baseline-like accuracy (at low dropout) and CBM-like steerability (at high dropout). The results do not support this hypothesis. Accuracy remains stable across dropout levels ($\approx 0.93$), and steerability remains uniformly near zero. Even at $p = 0.9$, where the side channel is dropped 90\% of the time during training, the concept path does not develop enough strength to meaningfully influence the final prediction.
+
+\subsection{Challenges: Training Duration and Side-Channel Dominance}
+\label{sec:training_limitation}
+
+Several practical difficulties shaped these results and deserve explicit discussion.
+
+The most significant limitation is that the hybrid models were trained for only one epoch over the 162\,770-image training set. This was driven by compute constraints in the Colab environment: training six hybrid variants end-to-end with ResNet-18 on the full CelebA dataset is time-intensive, and earlier attempts at longer training schedules were interrupted by session timeouts. A single epoch is sufficient for the side channel to reach near-baseline accuracy, since the pretrained ResNet features are already highly informative and a linear head can exploit them immediately. However, one epoch is likely \emph{not} sufficient for the concept path to develop strong weights, especially when it must compete with the side channel for gradient signal. Under high dropout, the concept path has a window of opportunity during each forward pass when the side channel is zeroed out, but one epoch may not provide enough such windows for the concept weights to accumulate.
+
+This creates an asymmetry: the side channel converges fast because it maps rich 512-dimensional features to a single logit, while the concept path must first predict 10 intermediate binary attributes and then map those to the label --- a harder optimization problem that requires more training iterations. With more epochs, we would expect the high-dropout models to gradually shift weight toward the concept path, but we were unable to verify this experimentally.
+
+A second challenge was the class imbalance in concept labels. Despite applying positive weights to the binary cross-entropy loss, several concepts remained poorly predicted. \emph{Chubby}, with only 5.8\% positive samples, achieved an F1 of just 0.35. This means the CBM's label head is operating on noisy concept inputs --- for rare concepts, the predicted probability is often wrong. This noise propagates through the bottleneck and contributes to the accuracy gap between the CBM and baseline. We experimented with different positive weight values but found that increasing the weight beyond the empirical class ratio introduced instability in training without meaningfully improving F1 on the hardest concepts.
+
+A third issue was the inconsistency between training and intervention regimes. The label head in both the CBM and hybrid models is trained on continuous sigmoid probabilities (values between 0 and 1), but the intervention procedure binarizes each concept before flipping. This means the intervened concept takes a hard value of 0 or 1, while the remaining concepts retain their continuous predicted probabilities. The label head never sees this mixture during training, which could attenuate the measured intervention effect. An alternative design would binarize all concepts before passing them to the label head during both training and intervention, ensuring consistency, but this would likely reduce accuracy further by discarding calibration information.
+
+\subsection{Concept Importance}
+
+Despite these challenges, the concept ranking from the pure CBM provides interpretable and credible insight. \emph{High\_Cheekbones} and \emph{Mouth\_Slightly\_Open} are the two strongest predictors of Smiling, both intuitively and quantitatively. The bottom-ranked concepts (\emph{Narrow\_Eyes}, \emph{Pointy\_Nose}) have minimal predictive value for Smiling, which aligns with domain knowledge. This ranking demonstrates that when the bottleneck is the only pathway, the learned weights are semantically meaningful --- a core advantage of the CBM architecture that the hybrid model sacrifices.
+
+
+% ══════════════════════════════════════════════════════════════
+\section{Conclusion}
+% ══════════════════════════════════════════════════════════════
+
+We compared a baseline classifier, a concept bottleneck model, and hybrid CBMs with varying side-channel dropout on the CelebA Smiling task. The pure CBM offers full interpretability and steerability at the cost of approximately 5 percentage points of accuracy, with concept importance rankings that align with domain intuition. The hybrid architecture recovers this accuracy but eliminates steerability entirely, as the side channel dominates prediction regardless of dropout level. Class imbalance in the concept labels and limited training duration for the hybrid models are important caveats: longer training and more aggressive regularization strategies (such as curriculum dropout annealing or explicit bottleneck capacity constraints) could narrow the steerability gap, though we were unable to test this within our compute budget. These results underscore a core design tension in concept bottleneck architectures: full steerability requires that concepts are the \emph{only} pathway to the label, and any bypass --- even a heavily regularized one --- can undermine this property.
+
+\end{document}

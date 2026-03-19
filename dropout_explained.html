@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>How Dropout Works</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #f0f0f0;
+    letter-spacing: -0.02em;
+  }
+  .page-sub {
+    font-size: 0.88rem;
+    color: #888;
+    margin-bottom: 40px;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+  .diagrams {
+    display: flex;
+    gap: 48px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 48px;
+  }
+  .diagram {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 16px;
+    padding: 32px 28px;
+    width: 340px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .diagram h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #f0f0f0;
+  }
+  .diagram .subtitle {
+    font-size: 0.78rem;
+    color: #888;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .phase-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  .tag-train { background: #553c9a; color: #d6bcfa; }
+  .tag-test { background: #276749; color: #9ae6b4; }
+
+  /* Bottom section */
+  .hybrid-section {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 16px;
+    padding: 36px 32px;
+    max-width: 760px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .hybrid-section h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #f0f0f0;
+  }
+  .hybrid-section .subtitle {
+    font-size: 0.78rem;
+    color: #888;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <h1>How Dropout Works</h1>
+  <p class="page-sub">During training, each neuron is randomly zeroed out with probability p. At test time, all neurons are active and outputs are scaled to compensate.</p>
+
+  <div class="diagrams">
+    <!-- TRAINING: No Dropout -->
+    <div class="diagram">
+      <span class="phase-tag tag-train">Training</span>
+      <h2>Without Dropout</h2>
+      <p class="subtitle">All neurons active -- prone to co-adaptation</p>
+      <svg width="280" height="320" viewBox="0 0 280 320">
+        <!-- Input layer -->
+        <text x="24" y="50" fill="#888" font-size="10" font-weight="600">INPUT</text>
+        <circle cx="60" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="60" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x1</text>
+        <circle cx="140" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="140" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x2</text>
+        <circle cx="220" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="220" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x3</text>
+
+        <!-- Hidden layer -->
+        <text x="14" y="150" fill="#888" font-size="10" font-weight="600">HIDDEN</text>
+        <circle cx="46" cy="146" r="14" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="46" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h1</text>
+        <circle cx="108" cy="146" r="14" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="108" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h2</text>
+        <circle cx="172" cy="146" r="14" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="172" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h3</text>
+        <circle cx="234" cy="146" r="14" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="234" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h4</text>
+
+        <!-- Output layer -->
+        <text x="16" y="250" fill="#888" font-size="10" font-weight="600">OUTPUT</text>
+        <circle cx="140" cy="246" r="14" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="140" y="250" text-anchor="middle" fill="#e0e0e0" font-size="10">y</text>
+
+        <!-- Connections: input to hidden (all active) -->
+        <g stroke="#805ad5" stroke-width="0.8" opacity="0.5">
+          <line x1="60" y1="60" x2="46" y2="132"/>
+          <line x1="60" y1="60" x2="108" y2="132"/>
+          <line x1="60" y1="60" x2="172" y2="132"/>
+          <line x1="60" y1="60" x2="234" y2="132"/>
+          <line x1="140" y1="60" x2="46" y2="132"/>
+          <line x1="140" y1="60" x2="108" y2="132"/>
+          <line x1="140" y1="60" x2="172" y2="132"/>
+          <line x1="140" y1="60" x2="234" y2="132"/>
+          <line x1="220" y1="60" x2="46" y2="132"/>
+          <line x1="220" y1="60" x2="108" y2="132"/>
+          <line x1="220" y1="60" x2="172" y2="132"/>
+          <line x1="220" y1="60" x2="234" y2="132"/>
+        </g>
+
+        <!-- Connections: hidden to output (all active) -->
+        <g stroke="#48bb78" stroke-width="0.8" opacity="0.5">
+          <line x1="46" y1="160" x2="140" y2="232"/>
+          <line x1="108" y1="160" x2="140" y2="232"/>
+          <line x1="172" y1="160" x2="140" y2="232"/>
+          <line x1="234" y1="160" x2="140" y2="232"/>
+        </g>
+
+        <!-- Annotation -->
+        <text x="140" y="296" text-anchor="middle" fill="#999" font-size="10">All 4 hidden neurons active</text>
+        <text x="140" y="310" text-anchor="middle" fill="#999" font-size="10">Neurons co-adapt to each other</text>
+      </svg>
+    </div>
+
+    <!-- TRAINING: With Dropout -->
+    <div class="diagram">
+      <span class="phase-tag tag-train">Training</span>
+      <h2>With Dropout (p=0.5)</h2>
+      <p class="subtitle">Random neurons zeroed out each step</p>
+      <svg width="280" height="320" viewBox="0 0 280 320">
+        <!-- Input layer -->
+        <text x="24" y="50" fill="#888" font-size="10" font-weight="600">INPUT</text>
+        <circle cx="60" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="60" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x1</text>
+        <circle cx="140" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="140" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x2</text>
+        <circle cx="220" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="220" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x3</text>
+
+        <!-- Hidden layer: h1 active, h2 DROPPED, h3 active, h4 DROPPED -->
+        <text x="14" y="150" fill="#888" font-size="10" font-weight="600">HIDDEN</text>
+
+        <!-- h1 active -->
+        <circle cx="46" cy="146" r="14" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="46" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h1</text>
+
+        <!-- h2 DROPPED -->
+        <circle cx="108" cy="146" r="14" fill="#1a1d27" stroke="#e53e3e" stroke-width="2" stroke-dasharray="4,3"/>
+        <line x1="96" y1="134" x2="120" y2="158" stroke="#e53e3e" stroke-width="2"/>
+        <line x1="120" y1="134" x2="96" y2="158" stroke="#e53e3e" stroke-width="2"/>
+
+        <!-- h3 active -->
+        <circle cx="172" cy="146" r="14" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="172" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h3</text>
+
+        <!-- h4 DROPPED -->
+        <circle cx="234" cy="146" r="14" fill="#1a1d27" stroke="#e53e3e" stroke-width="2" stroke-dasharray="4,3"/>
+        <line x1="222" y1="134" x2="246" y2="158" stroke="#e53e3e" stroke-width="2"/>
+        <line x1="246" y1="134" x2="222" y2="158" stroke="#e53e3e" stroke-width="2"/>
+
+        <!-- Output layer -->
+        <text x="16" y="250" fill="#888" font-size="10" font-weight="600">OUTPUT</text>
+        <circle cx="140" cy="246" r="14" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="140" y="250" text-anchor="middle" fill="#e0e0e0" font-size="10">y</text>
+
+        <!-- Connections: input to active hidden only -->
+        <g stroke="#805ad5" stroke-width="0.8" opacity="0.5">
+          <line x1="60" y1="60" x2="46" y2="132"/>
+          <line x1="60" y1="60" x2="172" y2="132"/>
+          <line x1="140" y1="60" x2="46" y2="132"/>
+          <line x1="140" y1="60" x2="172" y2="132"/>
+          <line x1="220" y1="60" x2="46" y2="132"/>
+          <line x1="220" y1="60" x2="172" y2="132"/>
+        </g>
+
+        <!-- Dead connections (faded) -->
+        <g stroke="#e53e3e" stroke-width="0.5" opacity="0.15" stroke-dasharray="3,3">
+          <line x1="60" y1="60" x2="108" y2="132"/>
+          <line x1="60" y1="60" x2="234" y2="132"/>
+          <line x1="140" y1="60" x2="108" y2="132"/>
+          <line x1="140" y1="60" x2="234" y2="132"/>
+          <line x1="220" y1="60" x2="108" y2="132"/>
+          <line x1="220" y1="60" x2="234" y2="132"/>
+        </g>
+
+        <!-- Connections: active hidden to output -->
+        <g stroke="#48bb78" stroke-width="0.8" opacity="0.5">
+          <line x1="46" y1="160" x2="140" y2="232"/>
+          <line x1="172" y1="160" x2="140" y2="232"/>
+        </g>
+        <!-- Dead connections to output -->
+        <g stroke="#e53e3e" stroke-width="0.5" opacity="0.15" stroke-dasharray="3,3">
+          <line x1="108" y1="160" x2="140" y2="232"/>
+          <line x1="234" y1="160" x2="140" y2="232"/>
+        </g>
+
+        <!-- Dropped labels -->
+        <text x="108" y="176" text-anchor="middle" fill="#e53e3e" font-size="8" font-weight="600">= 0</text>
+        <text x="234" y="176" text-anchor="middle" fill="#e53e3e" font-size="8" font-weight="600">= 0</text>
+
+        <!-- Annotation -->
+        <text x="140" y="290" text-anchor="middle" fill="#999" font-size="10">h2, h4 randomly zeroed out</text>
+        <text x="140" y="304" text-anchor="middle" fill="#999" font-size="10">Active outputs scaled by 1/(1-p) = 2x</text>
+        <text x="140" y="318" text-anchor="middle" fill="#fc8181" font-size="9">Different neurons dropped each step</text>
+      </svg>
+    </div>
+
+    <!-- TEST TIME -->
+    <div class="diagram">
+      <span class="phase-tag tag-test">Test Time</span>
+      <h2>No Dropout</h2>
+      <p class="subtitle">All neurons active, no scaling needed</p>
+      <svg width="280" height="320" viewBox="0 0 280 320">
+        <!-- Input layer -->
+        <text x="24" y="50" fill="#888" font-size="10" font-weight="600">INPUT</text>
+        <circle cx="60" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="60" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x1</text>
+        <circle cx="140" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="140" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x2</text>
+        <circle cx="220" cy="46" r="14" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="220" y="50" text-anchor="middle" fill="#e0e0e0" font-size="10">x3</text>
+
+        <!-- Hidden layer: all active, green tint to show "robust" -->
+        <text x="14" y="150" fill="#888" font-size="10" font-weight="600">HIDDEN</text>
+        <circle cx="46" cy="146" r="14" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="46" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h1</text>
+        <circle cx="108" cy="146" r="14" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="108" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h2</text>
+        <circle cx="172" cy="146" r="14" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="172" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h3</text>
+        <circle cx="234" cy="146" r="14" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="234" y="150" text-anchor="middle" fill="#e0e0e0" font-size="10">h4</text>
+
+        <!-- Output layer -->
+        <text x="16" y="250" fill="#888" font-size="10" font-weight="600">OUTPUT</text>
+        <circle cx="140" cy="246" r="14" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="140" y="250" text-anchor="middle" fill="#e0e0e0" font-size="10">y</text>
+
+        <!-- All connections active -->
+        <g stroke="#48bb78" stroke-width="0.8" opacity="0.4">
+          <line x1="60" y1="60" x2="46" y2="132"/>
+          <line x1="60" y1="60" x2="108" y2="132"/>
+          <line x1="60" y1="60" x2="172" y2="132"/>
+          <line x1="60" y1="60" x2="234" y2="132"/>
+          <line x1="140" y1="60" x2="46" y2="132"/>
+          <line x1="140" y1="60" x2="108" y2="132"/>
+          <line x1="140" y1="60" x2="172" y2="132"/>
+          <line x1="140" y1="60" x2="234" y2="132"/>
+          <line x1="220" y1="60" x2="46" y2="132"/>
+          <line x1="220" y1="60" x2="108" y2="132"/>
+          <line x1="220" y1="60" x2="172" y2="132"/>
+          <line x1="220" y1="60" x2="234" y2="132"/>
+          <line x1="46" y1="160" x2="140" y2="232"/>
+          <line x1="108" y1="160" x2="140" y2="232"/>
+          <line x1="172" y1="160" x2="140" y2="232"/>
+          <line x1="234" y1="160" x2="140" y2="232"/>
+        </g>
+
+        <!-- Annotation -->
+        <text x="140" y="290" text-anchor="middle" fill="#9ae6b4" font-size="10">All neurons active and robust</text>
+        <text x="140" y="304" text-anchor="middle" fill="#999" font-size="10">Each neuron learned to be useful</text>
+        <text x="140" y="318" text-anchor="middle" fill="#999" font-size="10">independently during training</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Hybrid CBM application -->
+  <div class="hybrid-section">
+    <h2>Dropout in Your Hybrid CBM</h2>
+    <p class="subtitle">Dropout is applied only to the side channel's 512 input features -- not to the concept path</p>
+    <svg width="700" height="200" viewBox="0 0 700 200">
+      <!-- Backbone output -->
+      <rect x="10" y="70" width="120" height="44" rx="8" fill="#2d3748" stroke="#4a5568" stroke-width="1.5"/>
+      <text x="70" y="89" text-anchor="middle" fill="#e0e0e0" font-size="11" font-weight="500">512 Features</text>
+      <text x="70" y="103" text-anchor="middle" fill="#888" font-size="9">from backbone</text>
+
+      <!-- Split arrows -->
+      <line x1="130" y1="80" x2="180" y2="40" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arr-p)"/>
+      <line x1="130" y1="102" x2="180" y2="145" stroke="#e53e3e" stroke-width="1.5" marker-end="url(#arr-r)"/>
+
+      <!-- Concept path (top) -->
+      <text x="190" y="20" fill="#b794f4" font-size="9" font-weight="600">CONCEPT PATH (no dropout)</text>
+      <rect x="184" y="26" width="130" height="34" rx="7" fill="#553c9a" stroke="#805ad5" stroke-width="1.2"/>
+      <text x="249" y="47" text-anchor="middle" fill="#e0e0e0" font-size="10">Concept Head</text>
+
+      <!-- Arrow -->
+      <line x1="314" y1="43" x2="350" y2="43" stroke="#805ad5" stroke-width="1.2" marker-end="url(#arr-p)"/>
+
+      <!-- Concepts -->
+      <rect x="354" y="26" width="90" height="34" rx="7" fill="#744210" stroke="#d69e2e" stroke-width="1.2"/>
+      <text x="399" y="47" text-anchor="middle" fill="#fefcbf" font-size="10">10 Probs</text>
+
+      <!-- Arrow -->
+      <line x1="444" y1="43" x2="480" y2="43" stroke="#805ad5" stroke-width="1.2" marker-end="url(#arr-p)"/>
+
+      <!-- Label head -->
+      <rect x="484" y="26" width="90" height="34" rx="7" fill="#276749" stroke="#48bb78" stroke-width="1.2"/>
+      <text x="529" y="47" text-anchor="middle" fill="#e0e0e0" font-size="10">Label Head</text>
+
+      <!-- Side channel (bottom) -->
+      <text x="190" y="128" fill="#fc8181" font-size="9" font-weight="600">SIDE CHANNEL (dropout applied here)</text>
+
+      <!-- Feature boxes: some active, some dropped -->
+      <g>
+        <!-- Active features -->
+        <rect x="184" y="136" width="16" height="28" rx="3" fill="#553c9a" stroke="#805ad5" stroke-width="1"/>
+        <rect x="204" y="136" width="16" height="28" rx="3" fill="#1a1d27" stroke="#e53e3e" stroke-width="1.2" stroke-dasharray="3,2"/>
+        <line x1="207" y1="139" x2="217" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+        <line x1="217" y1="139" x2="207" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+
+        <rect x="224" y="136" width="16" height="28" rx="3" fill="#553c9a" stroke="#805ad5" stroke-width="1"/>
+
+        <rect x="244" y="136" width="16" height="28" rx="3" fill="#1a1d27" stroke="#e53e3e" stroke-width="1.2" stroke-dasharray="3,2"/>
+        <line x1="247" y1="139" x2="257" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+        <line x1="257" y1="139" x2="247" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+
+        <rect x="264" y="136" width="16" height="28" rx="3" fill="#1a1d27" stroke="#e53e3e" stroke-width="1.2" stroke-dasharray="3,2"/>
+        <line x1="267" y1="139" x2="277" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+        <line x1="277" y1="139" x2="267" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+
+        <rect x="284" y="136" width="16" height="28" rx="3" fill="#553c9a" stroke="#805ad5" stroke-width="1"/>
+
+        <rect x="304" y="136" width="16" height="28" rx="3" fill="#1a1d27" stroke="#e53e3e" stroke-width="1.2" stroke-dasharray="3,2"/>
+        <line x1="307" y1="139" x2="317" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+        <line x1="317" y1="139" x2="307" y2="161" stroke="#e53e3e" stroke-width="1.2"/>
+
+        <rect x="324" y="136" width="16" height="28" rx="3" fill="#553c9a" stroke="#805ad5" stroke-width="1"/>
+        <rect x="344" y="136" width="16" height="28" rx="3" fill="#553c9a" stroke="#805ad5" stroke-width="1"/>
+
+        <text x="374" y="155" fill="#888" font-size="11">...</text>
+      </g>
+
+      <text x="254" y="180" text-anchor="middle" fill="#fc8181" font-size="8">p=0.9: 90% of these zeroed out</text>
+
+      <!-- Arrow from surviving features -->
+      <line x1="394" y1="150" x2="440" y2="150" stroke="#e53e3e" stroke-width="1.2" marker-end="url(#arr-r)"/>
+
+      <!-- Side linear -->
+      <rect x="444" y="133" width="100" height="34" rx="7" fill="#742a2a" stroke="#e53e3e" stroke-width="1.2"/>
+      <text x="494" y="154" text-anchor="middle" fill="#feb2b2" font-size="10">Linear(512,1)</text>
+
+      <!-- Both converge to sum -->
+      <line x1="574" y1="43" x2="620" y2="90" stroke="#48bb78" stroke-width="1.5" marker-end="url(#arr-g)"/>
+      <line x1="544" y1="150" x2="620" y2="100" stroke="#e53e3e" stroke-width="1.5" marker-end="url(#arr-r)"/>
+
+      <!-- Sum -->
+      <circle cx="632" cy="95" r="16" fill="#2d3748" stroke="#f6e05e" stroke-width="2"/>
+      <text x="632" y="100" text-anchor="middle" fill="#f6e05e" font-size="18" font-weight="700">+</text>
+
+      <!-- Output label -->
+      <line x1="648" y1="95" x2="680" y2="95" stroke="#f6e05e" stroke-width="1.5" marker-end="url(#arr-y)"/>
+      <text x="692" y="99" fill="#f6e05e" font-size="11" font-weight="600">y</text>
+
+      <defs>
+        <marker id="arr-p" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="none" stroke="#805ad5" stroke-width="1"/>
+        </marker>
+        <marker id="arr-r" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="none" stroke="#e53e3e" stroke-width="1"/>
+        </marker>
+        <marker id="arr-g" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="none" stroke="#48bb78" stroke-width="1"/>
+        </marker>
+        <marker id="arr-y" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="none" stroke="#f6e05e" stroke-width="1"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+</body>
+</html>

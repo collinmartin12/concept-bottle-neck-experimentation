@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CBM vs Hybrid CBM Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0f1117;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 40px;
+    color: #f0f0f0;
+    letter-spacing: -0.02em;
+  }
+  .diagrams {
+    display: flex;
+    gap: 60px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .diagram {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 16px;
+    padding: 36px 32px;
+    width: 420px;
+  }
+  .diagram h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #f0f0f0;
+  }
+  .diagram .subtitle {
+    font-size: 0.82rem;
+    color: #888;
+    margin-bottom: 28px;
+  }
+  svg { display: block; margin: 0 auto; }
+
+  /* Legend at bottom */
+  .legend {
+    margin-top: 44px;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 0.82rem;
+    color: #999;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+  <h1>Pure CBM vs. Hybrid CBM</h1>
+  <div class="diagrams">
+
+    <!-- Pure CBM -->
+    <div class="diagram">
+      <h2>Concept Bottleneck Model</h2>
+      <p class="subtitle">x &rarr; c &rarr; y &nbsp;|&nbsp; All information passes through concepts</p>
+      <svg width="356" height="420" viewBox="0 0 356 420">
+        <!-- Image input -->
+        <rect x="128" y="10" width="100" height="44" rx="8" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="178" y="37" text-anchor="middle" fill="#e0e0e0" font-size="13" font-weight="500">Image (x)</text>
+
+        <!-- Arrow down -->
+        <line x1="178" y1="54" x2="178" y2="86" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-grey)"/>
+
+        <!-- Backbone -->
+        <rect x="103" y="86" width="150" height="44" rx="8" fill="#2d3748" stroke="#4a5568" stroke-width="1.5"/>
+        <text x="178" y="105" text-anchor="middle" fill="#e0e0e0" font-size="12" font-weight="500">ResNet-18 Backbone</text>
+        <text x="178" y="120" text-anchor="middle" fill="#888" font-size="10">(512-dim features)</text>
+
+        <!-- Arrow down -->
+        <line x1="178" y1="130" x2="178" y2="162" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-grey)"/>
+
+        <!-- Concept Head -->
+        <rect x="103" y="162" width="150" height="44" rx="8" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="178" y="181" text-anchor="middle" fill="#e0e0e0" font-size="12" font-weight="500">Concept Head</text>
+        <text x="178" y="196" text-anchor="middle" fill="#b794f4" font-size="10">Linear(512, 10)</text>
+
+        <!-- Arrow down -->
+        <line x1="178" y1="206" x2="178" y2="238" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-grey)"/>
+
+        <!-- Sigmoid -->
+        <rect x="118" y="238" width="120" height="36" rx="18" fill="#2d3748" stroke="#805ad5" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="178" y="261" text-anchor="middle" fill="#b794f4" font-size="11">Sigmoid &rarr; [0,1]</text>
+
+        <!-- Arrow down -->
+        <line x1="178" y1="274" x2="178" y2="300" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-grey)"/>
+
+        <!-- Bottleneck highlight -->
+        <rect x="88" y="296" width="180" height="54" rx="10" fill="none" stroke="#e53e3e" stroke-width="2" stroke-dasharray="6,4"/>
+        <text x="278" y="310" fill="#e53e3e" font-size="9" font-weight="600">BOTTLENECK</text>
+        <text x="278" y="322" fill="#e53e3e" font-size="9">(10 dims only)</text>
+
+        <!-- Concept Probabilities -->
+        <rect x="108" y="302" width="140" height="42" rx="8" fill="#744210" stroke="#d69e2e" stroke-width="1.5"/>
+        <text x="178" y="321" text-anchor="middle" fill="#fefcbf" font-size="12" font-weight="500">10 Concept Probs</text>
+        <text x="178" y="336" text-anchor="middle" fill="#d69e2e" font-size="10">c = P(concept|x)</text>
+
+        <!-- Arrow down -->
+        <line x1="178" y1="344" x2="178" y2="370" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-grey)"/>
+
+        <!-- Label Head -->
+        <rect x="113" y="370" width="130" height="40" rx="8" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="178" y="386" text-anchor="middle" fill="#e0e0e0" font-size="12" font-weight="500">Label Head</text>
+        <text x="178" y="400" text-anchor="middle" fill="#9ae6b4" font-size="10">Linear(10, 1)</text>
+
+        <!-- Arrow defs -->
+        <defs>
+          <marker id="arrow-grey" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#555" stroke-width="1"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <!-- Hybrid CBM -->
+    <div class="diagram">
+      <h2>Hybrid CBM</h2>
+      <p class="subtitle">y = f(c) + s(x) &nbsp;|&nbsp; Concept path + side channel bypass</p>
+      <svg width="356" height="420" viewBox="0 0 356 420">
+        <!-- Image input -->
+        <rect x="128" y="10" width="100" height="44" rx="8" fill="#2c5282" stroke="#4a90d9" stroke-width="1.5"/>
+        <text x="178" y="37" text-anchor="middle" fill="#e0e0e0" font-size="13" font-weight="500">Image (x)</text>
+
+        <!-- Arrow down -->
+        <line x1="178" y1="54" x2="178" y2="86" stroke="#555" stroke-width="1.5" marker-end="url(#arrow-grey2)"/>
+
+        <!-- Backbone -->
+        <rect x="103" y="86" width="150" height="44" rx="8" fill="#2d3748" stroke="#4a5568" stroke-width="1.5"/>
+        <text x="178" y="105" text-anchor="middle" fill="#e0e0e0" font-size="12" font-weight="500">ResNet-18 Backbone</text>
+        <text x="178" y="120" text-anchor="middle" fill="#888" font-size="10">(512-dim features)</text>
+
+        <!-- SPLIT: two arrows diverge -->
+        <!-- Left path (concept path) -->
+        <line x1="155" y1="130" x2="105" y2="170" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+        <!-- Right path (side channel) -->
+        <line x1="200" y1="130" x2="280" y2="170" stroke="#e53e3e" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+
+        <!-- Left: Concept path label -->
+        <text x="68" y="152" fill="#b794f4" font-size="9" font-weight="600">CONCEPT PATH</text>
+
+        <!-- Concept Head -->
+        <rect x="30" y="172" width="150" height="40" rx="8" fill="#553c9a" stroke="#805ad5" stroke-width="1.5"/>
+        <text x="105" y="189" text-anchor="middle" fill="#e0e0e0" font-size="11" font-weight="500">Concept Head</text>
+        <text x="105" y="203" text-anchor="middle" fill="#b794f4" font-size="10">Linear(512, 10)</text>
+
+        <!-- Arrow down -->
+        <line x1="105" y1="212" x2="105" y2="236" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+        <!-- Sigmoid -->
+        <rect x="50" y="236" width="110" height="30" rx="15" fill="#2d3748" stroke="#805ad5" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="105" y="255" text-anchor="middle" fill="#b794f4" font-size="10">Sigmoid</text>
+
+        <!-- Arrow down -->
+        <line x1="105" y1="266" x2="105" y2="290" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+        <!-- Concept Probs -->
+        <rect x="35" y="290" width="140" height="36" rx="8" fill="#744210" stroke="#d69e2e" stroke-width="1.5"/>
+        <text x="105" y="312" text-anchor="middle" fill="#fefcbf" font-size="11" font-weight="500">10 Concept Probs</text>
+
+        <!-- Arrow down -->
+        <line x1="105" y1="326" x2="105" y2="350" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+
+        <!-- Label Head (concept) -->
+        <rect x="40" y="350" width="130" height="36" rx="8" fill="#276749" stroke="#48bb78" stroke-width="1.5"/>
+        <text x="105" y="373" text-anchor="middle" fill="#e0e0e0" font-size="11" font-weight="500">Label Head (10&rarr;1)</text>
+
+        <!-- Right: Side channel label -->
+        <text x="248" y="160" fill="#fc8181" font-size="9" font-weight="600">SIDE CHANNEL</text>
+
+        <!-- Dropout -->
+        <rect x="230" y="172" width="120" height="36" rx="8" fill="#742a2a" stroke="#e53e3e" stroke-width="1.5"/>
+        <text x="290" y="189" text-anchor="middle" fill="#feb2b2" font-size="11" font-weight="500">Dropout(p)</text>
+        <text x="290" y="203" text-anchor="middle" fill="#fc8181" font-size="9">interpretability knob</text>
+
+        <!-- Arrow down -->
+        <line x1="290" y1="208" x2="290" y2="240" stroke="#e53e3e" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+
+        <!-- Side Linear -->
+        <rect x="230" y="240" width="120" height="36" rx="8" fill="#742a2a" stroke="#e53e3e" stroke-width="1.5"/>
+        <text x="290" y="262" text-anchor="middle" fill="#feb2b2" font-size="11" font-weight="500">Linear(512, 1)</text>
+
+        <!-- Both paths converge to sum -->
+        <line x1="105" y1="386" x2="178" y2="398" stroke="#48bb78" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+        <line x1="290" y1="276" x2="290" y2="350" stroke="#e53e3e" stroke-width="1.5"/>
+        <line x1="290" y1="350" x2="220" y2="398" stroke="#e53e3e" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+
+        <!-- Sum node -->
+        <circle cx="195" cy="405" r="14" fill="#2d3748" stroke="#f6e05e" stroke-width="2"/>
+        <text x="195" y="410" text-anchor="middle" fill="#f6e05e" font-size="16" font-weight="700">+</text>
+
+        <!-- Arrow defs -->
+        <defs>
+          <marker id="arrow-grey2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#555" stroke-width="1"/>
+          </marker>
+          <marker id="arrow-purple" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#805ad5" stroke-width="1"/>
+          </marker>
+          <marker id="arrow-red" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#e53e3e" stroke-width="1"/>
+          </marker>
+          <marker id="arrow-green" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="none" stroke="#48bb78" stroke-width="1"/>
+          </marker>
+        </defs>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#2c5282; border:1px solid #4a90d9;"></div>
+      <span>Input</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#2d3748; border:1px solid #4a5568;"></div>
+      <span>Shared backbone</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#553c9a; border:1px solid #805ad5;"></div>
+      <span>Concept prediction</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#744210; border:1px solid #d69e2e;"></div>
+      <span>Concept bottleneck</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#276749; border:1px solid #48bb78;"></div>
+      <span>Label prediction</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#742a2a; border:1px solid #e53e3e;"></div>
+      <span>Side channel (bypass)</span>
+    </div>
+  </div>
+</body>
+</html>
